@@ -1,0 +1,292 @@
+# Code pipeline for serverless applications
+AWSTemplateFormatVersion: '2010-09-09'
+
+Description: >
+  Template to create a multi-step code-pipeline
+
+#
+#--------------------------------------------------------------------------
+# PARAMETERS
+#--------------------------------------------------------------------------
+#
+# Required and optional parameters to create CodePipeline for 
+# an elastic Benstalk application.
+#
+Parameters:
+
+#
+#--------------------------------------------------------------------------
+# General application settings
+#--------------------------------------------------------------------------
+#
+  AppName:
+    Description: Name of the application
+    Type: String
+
+#
+#--------------------------------------------------------------------------
+# GitHub settings
+#--------------------------------------------------------------------------
+#
+  GitHubOwner:
+    Type: String
+    Description: GitHub repository owner
+  GitHubRepo:
+    Type: String
+    Description: GitHub repository name
+  GitHubBranch:
+    Type: String
+    Default: master
+    Description: GitHub repository branch
+  GitHubToken:
+    Type: String
+    NoEcho: true
+    Description: GitHub repository OAuth token
+
+#
+#--------------------------------------------------------------------------
+# Environment settings
+#--------------------------------------------------------------------------
+#
+  EnvironmentName:
+    Type: String
+    Default: production
+    Description: Environment name e.g. production, prod, dev, stage, etc.
+
+#
+#--------------------------------------------------------------------------
+# Code build settings
+#--------------------------------------------------------------------------
+#
+  CodeBuildComputeType:
+    Description: The build compute type
+    Type: String
+    Default: BUILD_GENERAL1_SMALL
+    AllowedValues:
+      - BUILD_GENERAL1_SMALL
+      - BUILD_GENERAL1_MEDIUM
+      - BUILD_GENERAL1_LARGE
+  CodeBuildDockerImage:
+    Description: The docker image to be used for code build
+    Type: String
+    Default: onema/php-build:php-7.1-node-8.9
+
+#
+#--------------------------------------------------------------------------
+# RESOURCES
+#--------------------------------------------------------------------------
+#
+# Definition of all the resources required for the ElasticBeanstalk 
+# deployment pipeline
+#
+Resources:
+
+#
+#--------------------------------------------------------------------------
+# CodeBuild Role required to deploy the lambda functions.
+#--------------------------------------------------------------------------
+#
+  CodeBuildDeploymentRole:
+    Type: AWS::IAM::Role
+    Properties:
+      RoleName: !Sub "${EnvironmentName}-${AppName}-code-build-role"
+      AssumeRolePolicyDocument:
+        Version: "2012-10-17"
+        Statement:
+          - Effect: "Allow"
+            Principal:
+              Service:
+                - "codebuild.amazonaws.com"
+            Action:
+              - "sts:AssumeRole"
+      ManagedPolicyArns:
+      #================================================================
+      # NOTE: This role has admin access 
+      #       lock down to fit your needs!
+      #================================================================
+        - arn:aws:iam::aws:policy/AdministratorAccess
+
+#
+#--------------------------------------------------------------------------
+# CodeBuild definitions
+#--------------------------------------------------------------------------
+#
+  #========================================================================
+  # NOTE: At this time I don't know of an automated way to setup the GitHub
+  #       WebHook, maybe a custom resource with lambda?. 
+  #       A manual authentication step is required for the CodeBuildTest
+  #========================================================================
+  CodeBuildTest:
+    Type: AWS::CodeBuild::Project
+    Properties:
+      Name: !Sub "${EnvironmentName}-${AppName}-tests"
+      Description: !Sub "Run unit test for ${AppName}"
+      Artifacts:
+        Type: NO_ARTIFACTS
+      ServiceRole: !Ref CodeBuildDeploymentRole
+      Environment:
+        ComputeType: !Ref CodeBuildComputeType
+        EnvironmentVariables:
+          - Name: ENVIRONMENT_NAME
+            Value: !Ref EnvironmentName
+          - Name: BUCKET_NAME
+            Value: 
+              Fn::ImportValue: !Sub "${EnvironmentName}-${AppName}-artifacts"
+          - Name: APP_NAME
+            Value: !Ref AppName
+        Image: !Ref CodeBuildDockerImage
+        Type: LINUX_CONTAINER
+      Source:
+        Type: GITHUB
+        Location: !Sub "https://github.com/${GitHubOwner}/${GitHubRepo}.git"
+        BuildSpec: "buildspec-test.yml"
+
+  CodeBuild:
+    Type: AWS::CodeBuild::Project
+    Properties:
+      Name: !Sub "${EnvironmentName}-${AppName}-build"
+      Description: Build code for ElastcBeanstalk application
+      Artifacts:
+        Type: CODEPIPELINE
+      ServiceRole: !Ref CodeBuildDeploymentRole
+      Environment:
+        ComputeType: !Ref CodeBuildComputeType
+        EnvironmentVariables:
+          - Name: ENVIRONMENT_NAME
+            Value: !Ref EnvironmentName
+          - Name: BUCKET_NAME
+            Value: 
+              Fn::ImportValue: !Sub "${EnvironmentName}-${AppName}-artifacts"
+          - Name: APP_NAME
+            Value: !Ref AppName
+        Image: !Ref CodeBuildDockerImage
+        Type: LINUX_CONTAINER
+      Source:
+        Type: CODEPIPELINE
+
+#
+#--------------------------------------------------------------------------
+# CodePipeline role to build and deploy resources
+#--------------------------------------------------------------------------
+#
+  PipelineRole:
+    Type: AWS::IAM::Role
+    Properties:
+      RoleName: !Sub "${EnvironmentName}-${AppName}-code-pipeline-role"
+      AssumeRolePolicyDocument:
+        Statement:
+        - Action: ["sts:AssumeRole"]
+          Effect: Allow
+          Principal:
+            Service: [codepipeline.amazonaws.com]
+        Version: "2012-10-17"
+      ManagedPolicyArns:
+      #================================================================
+      # NOTE: This role has open access to serveral services
+      #       lock down to fit your needs!
+      #================================================================
+        - arn:aws:iam::aws:policy/service-role/AWSElasticBeanstalkService
+      Path: /
+
+#
+#--------------------------------------------------------------------------
+# Notification topic
+#--------------------------------------------------------------------------
+#
+  CodePipelineSNSTopic:
+    Type: "AWS::SNS::Topic"
+    Properties:
+      DisplayName: code-pipeline-notifications
+      TopicName: !Sub "${EnvironmentName}-${AppName}-deployment-notifications"
+
+#
+#--------------------------------------------------------------------------
+# CodePipeline definition
+#--------------------------------------------------------------------------
+#
+  Pipeline:
+    Type: AWS::CodePipeline::Pipeline
+    Properties:
+      ArtifactStore:
+        Location: 
+          Fn::ImportValue: !Sub "${EnvironmentName}-${AppName}-artifacts"
+        Type: S3
+      DisableInboundStageTransitions: []
+      Name: !Sub "${EnvironmentName}-${AppName}-cicd-code-pipeline"
+      RoleArn: !GetAtt [PipelineRole, Arn]
+      Stages:
+        - Name: Source
+          Actions:
+           - Name: Source
+             InputArtifacts: []
+             ActionTypeId:
+               Category: Source
+               Owner: ThirdParty
+               Provider: GitHub
+               Version: 1
+             OutputArtifacts:
+               - Name: AppSource
+             Configuration:
+               Owner: !Ref GitHubOwner
+               Repo: !Ref GitHubRepo
+               Branch: !Ref GitHubBranch
+               OAuthToken: !Ref GitHubToken
+             RunOrder: 1
+        - Name: Build
+          Actions:
+            - Name: BuildApplication
+              ActionTypeId:
+                Category: Build
+                Owner: AWS
+                Provider: CodeBuild
+                Version: 1
+              InputArtifacts:
+                - Name: AppSource
+              OutputArtifacts:
+                - Name: AppBuildArtifact
+              Configuration:
+                ProjectName: !Ref CodeBuild
+              RunOrder: 1
+        - Name: Deploy
+          Actions:
+            - Name: DeployElasticBeanstalk
+              ActionTypeId:
+                Category: Deploy
+                Owner: AWS
+                Provider: ElasticBeanstalk
+                Version: 1
+              InputArtifacts:
+                - Name: AppBuildArtifact
+              OutputArtifacts: []
+              Configuration:
+                ApplicationName: 
+                  Fn::ImportValue: !Sub "${EnvironmentName}-${AppName}-app"
+                EnvironmentName: 
+                  Fn::ImportValue: !Sub "${EnvironmentName}-${AppName}-env"
+              RunOrder: 1
+#
+#--------------------------------------------------------------------------
+# OUTPUTS
+#--------------------------------------------------------------------------
+#
+# Outputs of the resources generated by the code pipeline
+#
+Outputs:
+  CodePipeline:
+    Description: CodePipeline resource
+    Value: !Ref Pipeline
+    Export:
+      Name: !Sub "${EnvironmentName}-${AppName}-pipeline"
+
+  CodePipelineNotifications:
+    Description: Notifications topic for CodePipeline
+    Value: !Ref CodePipelineSNSTopic
+    Export:
+      Name: !Sub "${EnvironmentName}-${AppName}-pipeline-notifications"  
+  
+  CodeBuild:
+    Description: CodeBuild resource
+    Value: !Ref CodeBuild
+    Export:
+      Name: !Sub "${EnvironmentName}-${AppName}-codebuild"
+  

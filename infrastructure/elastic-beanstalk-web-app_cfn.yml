@@ -1,0 +1,440 @@
+# Code pipeline for serverless applications
+AWSTemplateFormatVersion: '2010-09-09'
+
+Description: >
+  Template to create a php elastic beanstalk
+#
+#--------------------------------------------------------------------------
+# PARAMETERS
+#--------------------------------------------------------------------------
+#
+# Required and optional parameters to create an Elastic Beanstalk App
+# 
+Parameters:
+
+#
+#--------------------------------------------------------------------------
+# General application settings
+#--------------------------------------------------------------------------
+#
+  AppName:
+    Description: Name of the application
+    Type: String
+    Description: Environment will use a single instance or a load balancer to distribute the load for the ASG
+  # Environment settings
+  EnvironmentName:
+    Type: String
+    Default: production
+    Description: Environment name for Production
+
+#
+#--------------------------------------------------------------------------
+# System settings
+#--------------------------------------------------------------------------
+#
+  SolutionStackVersion:
+    Default: 2.6.4
+    Type: String
+    Description: For more stack solution options see https://docs.aws.amazon.com/elasticbeanstalk/latest/dg/concepts.platforms.html#concepts.platforms.PHP
+  InstanceType:
+      Type: String
+      Default: t2.micro
+      AllowedValues:
+      - t2.nano 
+      - t2.micro 
+      - t2.small 
+      - t2.medium 
+      - t2.large 
+      - t2.xlarge 
+      - t2.2xlarge 
+      - m4.large 
+      - m4.xlarge 
+      - m4.2xlarge 
+      - m4.4xlarge 
+      - m4.10xlarge 
+      - m4.16xlarge 
+      - m5.large 
+      - m5.xlarge 
+      - m5.2xlarge 
+      - m5.4xlarge
+      - m5.12xlarge
+      - m5.24xlarge
+      # Compute optimized
+      - c4.large
+      - c4.xlarge
+      - c4.2xlarge
+      - c4.4xlarge
+      - c4.8xlarge
+      - c5.large
+      - c5.xlarge
+      - c5.2xlarge
+      - c5.4xlarge
+      - c5.9xlarge
+      - c5.18xlarge
+      # Memory optimized
+      - r4.large
+      - r4.xlarge
+      - r4.2xlarge
+      - r4.4xlarge
+      - r4.8xlarge
+      - r4.16xlarge
+      - x1.16xlarge
+      - x1.32xlarge
+      - x1e.xlarge
+      - x1e.2xlarge
+      - x1e.4xlarge
+      - x1e.8xlarge
+      - x1e.16xlarge
+      - x1e.32xlarg
+      Description: Enter t2.micro, m1.small, or m1.large. Default is t2.micro.
+  EnvironmentType:
+    Type: String
+    Default: SingleInstance
+    AllowedValues:
+      - SingleInstance
+      - LoadBalanced
+    Description: How should the Elastic Beanstalk environment be setup, either single instance or load balanced
+  MinNumberOfInstances:
+    Type: String
+    Default: 1
+    Description: Minimum number of instances in the AutoScaling Group
+    AllowedPattern: "[0-9]+"
+    ConstraintDescription: numeric value greater or equal to zero.
+  MaxNumberOfInstances:
+    Type: String
+    Default: 1
+    Description: Maximum number of instances in the AutoScaling Group
+    AllowedPattern: "[0-9]+"
+    ConstraintDescription: numeric value greater or equal to zero.
+
+#
+#--------------------------------------------------------------------------
+# PHP Settings
+#--------------------------------------------------------------------------
+#
+  DocumentRoot:
+    Type: String
+    Default: "/web"
+    Description: Location of the document root relative to the porjet source e.g. "/web" or "/public"
+    AllowedPattern: ^\/[a-zA-Z0-9-_\/]+
+    ConstraintDescription: must contain only alphanumeric characters "-", "_", and "/".
+  PhpVersion:
+    Default: PHP 7.1
+    Type: String
+    AllowedValues:
+      - PHP 7.1
+      - PHP 7.0
+      - PHP 5.6
+    Description: Platform version
+  MemoryLimit:
+    Type: String
+    Default: 256M
+    AllowedValues:
+      - 128M
+      - 256M
+      - 512M
+      - 1G
+      - 2G
+      - 4G
+      - 8G
+      - 16G
+      - 32G
+    Description: PHP Memory limit
+
+#
+#--------------------------------------------------------------------------
+# Environment variables
+#--------------------------------------------------------------------------
+#
+  DBUser:
+    NoEcho: false
+    Type: String
+    Description: Database admin account name
+    MinLength: '1'
+    MaxLength: '16'
+    AllowedPattern: "[a-zA-Z][a-zA-Z0-9]*"
+    ConstraintDescription: must begin with a letter and contain only alphanumeric characters.
+  DBName:
+    NoEcho: false
+    Type: String
+    Description: Database name
+    MinLength: '1'
+    MaxLength: '16'
+    AllowedPattern: "[a-zA-Z][a-zA-Z0-9]*"
+    ConstraintDescription: must begin with a letter and contain only alphanumeric characters.
+  DBHost:
+    Type: String
+    Description: Database host
+  DBPassword:
+    NoEcho: true
+    Type: String
+    Description: Database admin account password
+    MinLength: '8'
+    MaxLength: '41'
+    AllowedPattern: "[a-zA-Z0-9]*"
+    ConstraintDescription: minimum 8 characters and it must contain only alphanumeric characters
+  
+Metadata:
+  AWS::CloudFormation::Interface:
+    ParameterGroups:
+      - Label:
+          default: "Application Settings"
+        Parameters:
+          - AppName
+          - EnvironmentName
+      - Label:
+          default: "System Settings"
+        Parameters:
+          - EnvironmentType
+          - SolutionStackVersion
+          - InstanceType
+          - MinNumberOfInstances
+          - MaxNumberOfInstances
+      - Label:
+          default: "PHP Settings"
+        Parameters:
+          - PhpVersion
+          - DocumentRoot
+          - MemoryLimit
+      - Label:
+          default: "Database Settings"
+        Parameters:
+          - DBUser
+          - DBName
+          - DBHost
+          - DBPassword
+
+#
+#--------------------------------------------------------------------------
+# RESOURCES
+#--------------------------------------------------------------------------
+#
+# Resource definitions for ElasticBeanstalk
+# 
+Resources:
+
+#
+#--------------------------------------------------------------------------
+# S3 Buckets
+#--------------------------------------------------------------------------
+#
+  ArtifactsBucket:
+    Type: AWS::S3::Bucket
+    Properties:
+      BucketName: !Sub "elasticbeanstalk-${EnvironmentName}-${AppName}-artifacts"
+#       VersioningConfiguration:
+#         Status: Enable
+  FilesBucket:
+    Type: "AWS::S3::Bucket"
+    Properties:
+      BucketName: !Sub "${EnvironmentName}-${AppName}-files"
+          
+#
+#--------------------------------------------------------------------------
+# ElasticBeanstalk Application definition
+#--------------------------------------------------------------------------
+#
+  ElasticBeanstalkApplication:
+    Type: AWS::ElasticBeanstalk::Application
+    Properties:
+      ApplicationName: !Sub "${EnvironmentName}-${AppName}"
+      Description: AWS Elastic Beanstalk Sample Application
+
+  ElasticBeanstalkConfigurationTemplate:
+    Type: AWS::ElasticBeanstalk::ConfigurationTemplate
+    Properties:
+      ApplicationName: !Ref ElasticBeanstalkApplication
+      Description: AWS ElasticBeanstalk Configuration Template
+      OptionSettings:
+
+      # Environment Variables
+      - Namespace: aws:elasticbeanstalk:application:environment
+        OptionName: DB_HOST
+        Value: !Ref DBHost
+      - Namespace: aws:elasticbeanstalk:application:environment
+        OptionName: DB_USER
+        Value: !Ref DBUser
+      - Namespace: aws:elasticbeanstalk:application:environment
+        OptionName: DB_NAME
+        Value: !Ref DBName
+      - Namespace: aws:elasticbeanstalk:application:environment
+        OptionName: DB_PASSWORD
+        Value: !Ref DBPassword
+
+      # PHP Settings
+      - Namespace: aws:elasticbeanstalk:container:php:phpini
+        OptionName: document_root
+        Value: !Ref DocumentRoot
+      - Namespace: aws:elasticbeanstalk:container:php:phpini
+        OptionName: memory_limit
+        Value: !Ref MemoryLimit
+
+      # AutoScaling Settings
+      - Namespace: 'aws:autoscaling:launchconfiguration'
+        OptionName: IamInstanceProfile
+        Value: !Ref InstanceProfile
+      - Namespace: 'aws:autoscaling:launchconfiguration'
+        OptionName: InstanceType
+        Value: !Ref InstanceType
+      - Namespace: 'aws:elasticbeanstalk:environment'
+        OptionName: ServiceRole
+        Value: !Ref ServiceRole
+      - Namespace: aws:autoscaling:asg
+        OptionName: MinSize
+        Value: !Ref MinNumberOfInstances
+      - Namespace: aws:autoscaling:asg
+        OptionName: MaxSize
+        Value: !Ref MaxNumberOfInstances
+      - Namespace: aws:elasticbeanstalk:environment
+        OptionName: EnvironmentType
+        Value: !Ref EnvironmentType
+      SolutionStackName: !Sub "64bit Amazon Linux 2017.09 v${SolutionStackVersion} running ${PhpVersion}" 
+
+  ElasticBeanstalkEnvironment:
+    Type: AWS::ElasticBeanstalk::Environment
+    Properties:
+      EnvironmentName: !Sub "${EnvironmentName}-${AppName}-env"
+      ApplicationName: !Ref ElasticBeanstalkApplication
+      Description: AWS ElasticBeanstalk Environment
+      TemplateName: !Ref ElasticBeanstalkConfigurationTemplate
+
+#
+#--------------------------------------------------------------------------
+# Instance permissions definitions 
+#--------------------------------------------------------------------------
+#
+  InstanceProfile:
+    Type: 'AWS::IAM::InstanceProfile'
+    Properties:
+      Path: /
+      Roles:
+        - !Ref InstanceProfileRole
+
+  InstanceProfileRole:
+    Type: AWS::IAM::Role
+    Properties:
+      AssumeRolePolicyDocument:
+        Version: 2012-10-17
+        Statement:
+          - Effect: Allow
+            Principal:
+              Service: 'ec2.amazonaws.com'
+            Action:
+              - 'sts:AssumeRole'
+      Policies:
+        - PolicyName: root
+          PolicyDocument:
+            Version: 2012-10-17
+            Statement:
+              - Sid: BucketAccess
+                Action:
+                  - 's3:Get*'
+                  - 's3:List*'
+                  - 's3:PutObject'
+                Effect: Allow
+                Resource:
+                  - !Sub "arn:aws:s3:::${EnvironmentName}-ArtifactsBucket"
+                  - !GetAtt FilesBucket.Arn
+              - Sid: ECSAccess
+                Effect: Allow
+                Action:
+                  - 'ecs:StartTask'
+                  - 'ecs:StopTask'
+                  - 'ecs:RegisterContainerInstance'
+                  - 'ecs:DeregisterContainerInstance'
+                  - 'ecs:DescribeContainerInstances'
+                  - 'ecs:DiscoverPollEndpoint'
+                  - 'ecs:Submit*'
+                  - 'ecs:Poll'
+                Resource: '*'
+              - Sid: QueueAccess
+                Action:
+                  - 'sqs:ChangeMessageVisibility'
+                  - 'sqs:DeleteMessage'
+                  - 'sqs:ReceiveMessage'
+                  - 'sqs:SendMessage'
+                Effect: Allow
+                Resource: '*'
+              - Sid: MetricsAccess
+                Action:
+                  - 'cloudwatch:PutMetricData'
+                Effect: Allow
+                Resource: '*'
+      Path: /
+
+#
+#--------------------------------------------------------------------------
+# Service role for EC2
+#--------------------------------------------------------------------------
+#
+  ServiceRole:
+    Type: AWS::IAM::Role
+    Properties:
+      AssumeRolePolicyDocument:
+        Version: 2012-10-17
+        Statement:
+          - Sid: ''
+            Effect: Allow
+            Principal:
+              Service: 'elasticbeanstalk.amazonaws.com'
+            Action: 'sts:AssumeRole'
+            Condition:
+              StringEquals:
+                'sts:ExternalId': elasticbeanstalk
+      Policies:
+        - PolicyName: root
+          PolicyDocument:
+            Version: 2012-10-17
+            Statement:
+              - Effect: Allow
+                Action:
+                  - 'elasticloadbalancing:DescribeInstanceHealth'
+                  - 'ec2:DescribeInstances'
+                  - 'ec2:DescribeInstanceStatus'
+                  - 'ec2:GetConsoleOutput'
+                  - 'ec2:AssociateAddress'
+                  - 'ec2:DescribeAddresses'
+                  - 'ec2:DescribeSecurityGroups'
+                  - 'sqs:GetQueueAttributes'
+                  - 'sqs:GetQueueUrl'
+                  - 'autoscaling:DescribeAutoScalingGroups'
+                  - 'autoscaling:DescribeAutoScalingInstances'
+                  - 'autoscaling:DescribeScalingActivities'
+                  - 'autoscaling:DescribeNotificationConfigurations'
+                Resource:
+                  - '*'
+      Path: /
+
+
+#
+#--------------------------------------------------------------------------
+# OUTPUTS
+#--------------------------------------------------------------------------
+#
+# Outputs and exported values
+# 
+Outputs:
+  ElasticBeanstalkApplication:
+    Description: The EB application 
+    Value: !Ref ElasticBeanstalkApplication
+    Export: 
+      Name: !Sub "${EnvironmentName}-${AppName}-app"
+
+  ElasticBeanstalkEnvironment:
+    Description: The EB environment 
+    Value: !Ref ElasticBeanstalkEnvironment
+    Export: 
+      Name: !Sub "${EnvironmentName}-${AppName}-env"
+
+  ArtifactsBucketOutput:
+    Description: The s3 bucket to store all artifacts
+    Value:
+      Ref: ArtifactsBucket
+    Export:
+      Name: !Sub "${EnvironmentName}-${AppName}-artifacts"
+  FilesBucketOutput:
+    Description: The s3 bucket to store any website assets
+    Value:
+      Ref: FilesBucket
+    Export:
+      Name: !Sub "${EnvironmentName}-${AppName}-files"
