@@ -3,7 +3,8 @@ AWSTemplateFormatVersion: '2010-09-09'
 
 Description: >
   Template to create a multi-step code-pipeline for deploying applications to
-  an elastic beanstalk environment
+  a staging environment, and after a manual approval process, deploy the application
+  to a production environment
 
 #
 #--------------------------------------------------------------------------
@@ -76,11 +77,13 @@ Parameters:
     Type: String
     Default: onema/php-build:php-7.1-node-8.9
 
-  ElasticBeanstalkApplication:
+  ElasticBeanstalkStagingApplication:
     Type: String
-  ElasticBeanstalkEnvironment:
+  ElasticBeanstalkStagingEnvironment:
     Type: String
-  ArtifactsBucket:
+  ElasticBeanstalkProductionApplication:
+    Type: String
+  ElasticBeanstalkProductionEnvironment:
     Type: String
 
 #
@@ -287,7 +290,7 @@ Resources:
               Configuration:
                 ProjectName: !Ref CodeBuild
               RunOrder: 1
-        - Name: Deploy
+        - Name: DeployToStaging
           Actions:
             - Name: DeployElasticBeanstalk
               ActionTypeId:
@@ -299,9 +302,37 @@ Resources:
                 - Name: AppBuildArtifact
               OutputArtifacts: []
               Configuration:
-                ApplicationName: !Ref "ElasticBeanstalkApplication"
-                EnvironmentName: !Ref "ElasticBeanstalkEnvironment"
+                ApplicationName: !Ref "ElasticBeanstalkStagingApplication"
+                EnvironmentName: !Ref "ElasticBeanstalkStagingEnvironment"
               RunOrder: 1
+            - Name: ApproveStack
+              ActionTypeId:
+                Category: Approval
+                Owner: AWS
+                Provider: Manual
+                Version: "1"
+              Configuration:
+                NotificationArn: !Ref CodePipelineSNSTopic
+                CustomData:
+                  !Sub |
+                    PLEASE REVIEW THESE CHANGES IN STAGING.
+                    Do you want to create a change set against the STAGING environment?
+              RunOrder: 2
+        - Name: DeployToProduction
+          Actions:
+          - Name: DeployElasticBeanstalk
+            ActionTypeId:
+              Category: Deploy
+              Owner: AWS
+              Provider: ElasticBeanstalk
+              Version: 1
+            InputArtifacts:
+            - Name: AppBuildArtifact
+            OutputArtifacts: []
+            Configuration:
+              ApplicationName: !Ref "ElasticBeanstalkProductionApplication"
+              EnvironmentName: !Ref "ElasticBeanstalkProductionEnvironment"
+            RunOrder: 1
 #
 #--------------------------------------------------------------------------
 # OUTPUTS

@@ -20,7 +20,6 @@ Parameters:
   AppName:
     Description: Name of the application
     Type: String
-    Description: Environment will use a single instance or a load balancer to distribute the load for the ASG
   # Environment settings
   EnvironmentName:
     Type: String
@@ -33,7 +32,7 @@ Parameters:
 #--------------------------------------------------------------------------
 #
   SolutionStackVersion:
-    Default: 2.6.4
+    Default: 2.8.1
     Type: String
     Description: For more stack solution options see https://docs.aws.amazon.com/elasticbeanstalk/latest/dg/concepts.platforms.html#concepts.platforms.PHP
   InstanceType:
@@ -119,9 +118,10 @@ Parameters:
     AllowedPattern: ^\/[a-zA-Z0-9-_\/]+
     ConstraintDescription: must contain only alphanumeric characters "-", "_", and "/".
   PhpVersion:
-    Default: PHP 7.1
+    Default: PHP 7.2
     Type: String
     AllowedValues:
+      - PHP 7.2
       - PHP 7.1
       - PHP 7.0
       - PHP 5.6
@@ -173,7 +173,7 @@ Parameters:
     MaxLength: '41'
     AllowedPattern: "[a-zA-Z0-9]*"
     ConstraintDescription: minimum 8 characters and it must contain only alphanumeric characters
-  
+
 Metadata:
   AWS::CloudFormation::Interface:
     ParameterGroups:
@@ -288,7 +288,7 @@ Resources:
       - Namespace: aws:elasticbeanstalk:environment
         OptionName: EnvironmentType
         Value: !Ref EnvironmentType
-      SolutionStackName: !Sub "64bit Amazon Linux 2017.09 v${SolutionStackVersion} running ${PhpVersion}" 
+      SolutionStackName: !Sub "64bit Amazon Linux 2018.03 v${SolutionStackVersion} running ${PhpVersion}"
 
   ElasticBeanstalkEnvironment:
     Type: AWS::ElasticBeanstalk::Environment
@@ -326,6 +326,14 @@ Resources:
           PolicyDocument:
             Version: 2012-10-17
             Statement:
+              - Sid: LogAccess
+                Action:
+                  - 'logs:DescribeLogStreams'
+                  - 'logs:CreateLogStream'
+                  - 'logs:PutLogEvents'
+                Effect: Allow
+                Resource:
+                  - 'arn:aws:logs:*:*:log-group:/aws/elasticbeanstalk/*:log-stream:*'
               - Sid: BucketAccess
                 Action:
                   - 's3:Get*'
