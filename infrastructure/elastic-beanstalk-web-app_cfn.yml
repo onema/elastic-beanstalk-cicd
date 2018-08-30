@@ -113,7 +113,7 @@ Parameters:
 #
   DocumentRoot:
     Type: String
-    Default: "/web"
+    Default: "/public"
     Description: Location of the document root relative to the porjet source e.g. "/web" or "/public"
     AllowedPattern: ^\/[a-zA-Z0-9-_\/]+
     ConstraintDescription: must contain only alphanumeric characters "-", "_", and "/".
@@ -218,12 +218,6 @@ Resources:
 # S3 Buckets
 #--------------------------------------------------------------------------
 #
-  ArtifactsBucket:
-    Type: AWS::S3::Bucket
-    Properties:
-      BucketName: !Sub "elasticbeanstalk-${EnvironmentName}-${AppName}-artifacts"
-#       VersioningConfiguration:
-#         Status: Enable
   FilesBucket:
     Type: "AWS::S3::Bucket"
     Properties:
@@ -341,7 +335,6 @@ Resources:
                   - 's3:PutObject'
                 Effect: Allow
                 Resource:
-                  - !Sub "arn:aws:s3:::${EnvironmentName}-ArtifactsBucket"
                   - !GetAtt FilesBucket.Arn
               - Sid: ECSAccess
                 Effect: Allow
@@ -434,12 +427,6 @@ Outputs:
     Export: 
       Name: !Sub "${EnvironmentName}-${AppName}-env"
 
-  ArtifactsBucketOutput:
-    Description: The s3 bucket to store all artifacts
-    Value:
-      Ref: ArtifactsBucket
-    Export:
-      Name: !Sub "${EnvironmentName}-${AppName}-artifacts"
   FilesBucketOutput:
     Description: The s3 bucket to store any website assets
     Value:

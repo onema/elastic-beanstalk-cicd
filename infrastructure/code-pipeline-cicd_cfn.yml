@@ -80,8 +80,37 @@ Parameters:
     Type: String
   ElasticBeanstalkEnvironment:
     Type: String
-  ArtifactsBucket:
-    Type: String
+
+
+Metadata:
+  AWS::CloudFormation::Interface:
+    ParameterGroups:
+    - Label:
+        default: "Application Settings"
+      Parameters:
+      - AppName
+      - EnvironmentName
+    - Label:
+        default: "CodeBuild Settings"
+      Parameters:
+      - CodeBuildComputeType
+      - CodeBuildDockerImage
+    - Label:
+        default: "Staging Settings"
+      Parameters:
+      - ElasticBeanstalkApplication
+      - ElasticBeanstalkEnvironment
+    - Label:
+        default: "GitHub Settings"
+      Parameters:
+      - GitHubBranch
+      - GitHubOwner
+      - GitHubRepo
+      - GitHubToken
+    - Label:
+        default: "Notification Settings"
+      Parameters:
+      - NotificationEmail
 
 #
 #--------------------------------------------------------------------------

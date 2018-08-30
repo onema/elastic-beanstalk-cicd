@@ -50,11 +50,6 @@ Parameters:
 # Environment settings
 #--------------------------------------------------------------------------
 #
-  EnvironmentName:
-    Type: String
-    Default: production
-    Description: Environment name e.g. production, prod, dev, stage, etc.
-
   NotificationEmail:
     Type: String
     Description: Notifications Email
@@ -86,6 +81,41 @@ Parameters:
   ElasticBeanstalkProductionEnvironment:
     Type: String
 
+Metadata:
+  AWS::CloudFormation::Interface:
+    ParameterGroups:
+    - Label:
+        default: "Application Settings"
+      Parameters:
+      - AppName
+    - Label:
+        default: "CodeBuild Settings"
+      Parameters:
+        - CodeBuildComputeType
+        - CodeBuildDockerImage
+    - Label:
+        default: "Staging Settings"
+      Parameters:
+      - ElasticBeanstalkStagingApplication
+      - ElasticBeanstalkStagingEnvironment
+    - Label:
+        default: "Production Settings"
+      Parameters:
+      - ElasticBeanstalkProductionApplication
+      - ElasticBeanstalkProductionEnvironment
+    - Label:
+        default: "GitHub Settings"
+      Parameters:
+      - GitHubBranch
+      - GitHubOwner
+      - GitHubRepo
+      - GitHubToken
+    - Label:
+        default: "Notification Settings"
+      Parameters:
+      - NotificationEmail
+
+
 #
 #--------------------------------------------------------------------------
 # RESOURCES
@@ -104,7 +134,7 @@ Resources:
   CodeBuildDeploymentRole:
     Type: AWS::IAM::Role
     Properties:
-      RoleName: !Sub "${EnvironmentName}-${AppName}-code-build-role"
+      RoleName: !Sub "${AppName}-code-build-role"
       AssumeRolePolicyDocument:
         Version: "2012-10-17"
         Statement:
@@ -134,7 +164,7 @@ Resources:
   CodeBuildTest:
     Type: AWS::CodeBuild::Project
     Properties:
-      Name: !Sub "${EnvironmentName}-${AppName}-tests"
+      Name: !Sub "${AppName}-tests"
       Description: !Sub "Run unit test for ${AppName}"
       Artifacts:
         Type: NO_ARTIFACTS
@@ -142,8 +172,6 @@ Resources:
       Environment:
         ComputeType: !Ref CodeBuildComputeType
         EnvironmentVariables:
-          - Name: ENVIRONMENT_NAME
-            Value: !Ref EnvironmentName
           - Name: BUCKET_NAME
             Value: !Ref "ArtifactsBucket"
           - Name: APP_NAME
@@ -158,7 +186,7 @@ Resources:
   CodeBuild:
     Type: AWS::CodeBuild::Project
     Properties:
-      Name: !Sub "${EnvironmentName}-${AppName}-build"
+      Name: !Sub "${AppName}-build"
       Description: Build code for ElastcBeanstalk application
       Artifacts:
         Type: CODEPIPELINE
@@ -166,8 +194,6 @@ Resources:
       Environment:
         ComputeType: !Ref CodeBuildComputeType
         EnvironmentVariables:
-          - Name: ENVIRONMENT_NAME
-            Value: !Ref EnvironmentName
           - Name: BUCKET_NAME
             Value: !Ref "ArtifactsBucket"
           - Name: APP_NAME
@@ -185,7 +211,7 @@ Resources:
   PipelineRole:
     Type: AWS::IAM::Role
     Properties:
-      RoleName: !Sub "${EnvironmentName}-${AppName}-code-pipeline-role"
+      RoleName: !Sub "${AppName}-code-pipeline-role"
       AssumeRolePolicyDocument:
         Statement:
         - Action: ["sts:AssumeRole"]
@@ -237,7 +263,7 @@ Resources:
     Type: "AWS::SNS::Topic"
     Properties:
       DisplayName: code-pipeline-notifications
-      TopicName: !Sub "${EnvironmentName}-${AppName}-deployment-notifications"
+      TopicName: !Sub "${AppName}-deployment-notifications"
       Subscription:
         - Endpoint: !Ref NotificationEmail
           Protocol: email
@@ -255,7 +281,7 @@ Resources:
         Location: !Ref "ArtifactsBucket"
         Type: S3
       DisableInboundStageTransitions: []
-      Name: !Sub "${EnvironmentName}-${AppName}-cicd-code-pipeline"
+      Name: !Sub "${AppName}-cicd-code-pipeline"
       RoleArn: !GetAtt [PipelineRole, Arn]
       Stages:
         - Name: Source
@@ -345,17 +371,17 @@ Outputs:
     Description: CodePipeline resource
     Value: !Ref Pipeline
     Export:
-      Name: !Sub "${EnvironmentName}-${AppName}-pipeline"
+      Name: !Sub "${AppName}-pipeline"
 
   CodePipelineNotifications:
     Description: Notifications topic for CodePipeline
     Value: !Ref CodePipelineSNSTopic
     Export:
-      Name: !Sub "${EnvironmentName}-${AppName}-pipeline-notifications"  
+      Name: !Sub "${AppName}-pipeline-notifications"
   
   CodeBuild:
     Description: CodeBuild resource
     Value: !Ref CodeBuild
     Export:
-      Name: !Sub "${EnvironmentName}-${AppName}-codebuild"
+      Name: !Sub "${AppName}-codebuild"
   
