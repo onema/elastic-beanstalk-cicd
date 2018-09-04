@@ -108,7 +108,7 @@ Parameters:
 
   DeploymentPolicy:
     Type: String
-    Description: Deployment Policy
+    Description: Deployment Policy. Immutable deployment requires Enhanced Health Reporting and Monitoring
     Default: AllAtOnce
     AllowedValues:
       - AllAtOnce
@@ -139,6 +139,13 @@ Parameters:
       - 50
       - 75
       - 100
+  EnhancedHealthReporting:
+    Type: String
+    Description: Enable enhanced health reporting and monitoring
+    Default: basic
+    AllowedValues:
+      - basic
+      - enhanced
 
 #
 #--------------------------------------------------------------------------
@@ -230,6 +237,7 @@ Metadata:
           - DeploymentPolicy
           - BatchSizeType
           - BatchSize
+          - EnhancedHealthReporting
       - Label:
           default: "PHP Settings"
         Parameters:
@@ -333,6 +341,9 @@ Resources:
       - Namespace: aws:elasticbeanstalk:command
         OptionName: BatchSize
         Value: !Ref BatchSize
+      - Namespace: aws:elasticbeanstalk:healthreporting:system
+        OptionName: SystemType
+        Value: !Ref EnhancedHealthReporting
 
       SolutionStackName: !Sub "64bit Amazon Linux 2018.03 v${SolutionStackVersion} running ${PhpVersion}"
 
