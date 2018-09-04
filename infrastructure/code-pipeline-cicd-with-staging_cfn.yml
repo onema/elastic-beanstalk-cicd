@@ -22,7 +22,7 @@ Parameters:
 #--------------------------------------------------------------------------
 #
   AppName:
-    Description: Name of the application
+    Description: Name of the Elastic Beanstalk application
     Type: String
 
 #
@@ -72,14 +72,6 @@ Parameters:
     Type: String
     Default: onema/php-build:php-7.1-node-8.9
 
-  ElasticBeanstalkStagingApplication:
-    Type: String
-  ElasticBeanstalkStagingEnvironment:
-    Type: String
-  ElasticBeanstalkProductionApplication:
-    Type: String
-  ElasticBeanstalkProductionEnvironment:
-    Type: String
 
 Metadata:
   AWS::CloudFormation::Interface:
@@ -93,16 +85,6 @@ Metadata:
       Parameters:
         - CodeBuildComputeType
         - CodeBuildDockerImage
-    - Label:
-        default: "Staging Settings"
-      Parameters:
-      - ElasticBeanstalkStagingApplication
-      - ElasticBeanstalkStagingEnvironment
-    - Label:
-        default: "Production Settings"
-      Parameters:
-      - ElasticBeanstalkProductionApplication
-      - ElasticBeanstalkProductionEnvironment
     - Label:
         default: "GitHub Settings"
       Parameters:
@@ -240,7 +222,7 @@ Resources:
 
       ManagedPolicyArns:
       #================================================================
-      # NOTE: This role has open access to serveral services
+      # NOTE: This role has open access to several services
       #       lock down to fit your needs!
       #================================================================
         - arn:aws:iam::aws:policy/service-role/AWSElasticBeanstalkService
@@ -328,8 +310,9 @@ Resources:
                 - Name: AppBuildArtifact
               OutputArtifacts: []
               Configuration:
-                ApplicationName: !Ref "ElasticBeanstalkStagingApplication"
-                EnvironmentName: !Ref "ElasticBeanstalkStagingEnvironment"
+                ApplicationName: !Ref "AppName"
+                EnvironmentName:
+                  Fn::ImportValue: !Sub "staging-${AppName}-env"
               RunOrder: 1
             - Name: ApproveStack
               ActionTypeId:
@@ -342,7 +325,7 @@ Resources:
                 CustomData:
                   !Sub |
                     PLEASE REVIEW THESE CHANGES IN STAGING.
-                    Do you want to create a change set against the STAGING environment?
+                    Deploy to the PRODUCTION environment?
               RunOrder: 2
         - Name: DeployToProduction
           Actions:
@@ -356,8 +339,9 @@ Resources:
             - Name: AppBuildArtifact
             OutputArtifacts: []
             Configuration:
-              ApplicationName: !Ref "ElasticBeanstalkProductionApplication"
-              EnvironmentName: !Ref "ElasticBeanstalkProductionEnvironment"
+              ApplicationName: !Ref "AppName"
+              EnvironmentName:
+                Fn::ImportValue: !Sub "production-${AppName}-env"
             RunOrder: 1
 #
 #--------------------------------------------------------------------------
