@@ -161,9 +161,15 @@ Resources:
         Image: !Ref CodeBuildDockerImage
         Type: LINUX_CONTAINER
       Source:
+        Auth:
+          Type: OAUTH
         Type: GITHUB
+        GitCloneDepth: 1
         Location: !Sub "https://github.com/${GitHubOwner}/${GitHubRepo}.git"
         BuildSpec: "buildspec-test.yml"
+        ReportBuildStatus: true
+        Triggers:
+          Webhook: true
 
   CodeBuild:
     Type: AWS::CodeBuild::Project
