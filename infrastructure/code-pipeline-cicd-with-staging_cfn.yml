@@ -168,8 +168,8 @@ Resources:
         Location: !Sub "https://github.com/${GitHubOwner}/${GitHubRepo}.git"
         BuildSpec: "buildspec-test.yml"
         ReportBuildStatus: true
-        Triggers:
-          Webhook: true
+      Triggers:
+        Webhook: true
 
   CodeBuild:
     Type: AWS::CodeBuild::Project
