@@ -70,7 +70,7 @@ Parameters:
   CodeBuildDockerImage:
     Description: The docker image to be used for code build
     Type: String
-    Default: onema/php-build:php-7.1-node-8.9
+    Default: onema/php-build:php-7.2-node-8.12
 
 
 Metadata:
